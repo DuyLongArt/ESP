@@ -1,0 +1,77 @@
+esphome:
+  name: duylongnetwork
+  friendly_name: DuyLongNetwork
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+    version: 3.2.1
+    # version: 3.0.0
+
+  
+web_server:
+  port: 80
+# Set up I2C for the OLED display
+i2c:
+  sda: GPIO21
+  scl: GPIO22
+  scan: true
+
+# Fonts for the UI
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 12
+  - file: "gfonts://Open Sans"
+    id: font_large
+    size: 15
+
+switch:
+  - platform: gpio
+    name: "Main Device Switch"
+    pin: GPIO13
+    id: my_device_switch
+    # This ensures the display updates whenever the switch is toggled
+    on_turn_on:
+      - component.update: my_display
+    on_turn_off:
+      - component.update: my_display
+
+display:
+  - platform: ssd1306_i2c
+    id: my_display
+    model: "SSD1306 128x64"
+    address: 0x3C
+    update_interval: 1s
+    lambda: |-
+      // Header
+      it.print(0, 0, id(font_large), "DUY LONG");
+      
+      // Horizontal Line
+      it.line(0, 24, 127, 24); 
+      
+      // Status Text
+      if (id(my_device_switch).state) {
+        it.printf(0, 30, id(font_small), "Switch: ON");
+      } else {
+        it.printf(0, 30, id(font_small), "Switch: OFF");
+      }
+captive_portal:
+logger:
+
+ota:
+  - platform: esphome
+    password: "77c43d88a4205b2856891b145ba21b1c"
+
+wifi:
+  ssid: "DuyLongNetwork"
+  password: "duylongpass"
+  manual_ip:
+    static_ip: 192.168.2.29  # Choose an IP outside your DHCP range
+    gateway: 192.168.2.1     # Your router's IP
+    subnet: 255.255.255.0
+
+# Enable Home Assistant API
+api:

@@ -1,0 +1,168 @@
+esphome:
+  name: esp32mini-api
+  friendly_name: Esp32Mini Custom API Display
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "oYYeNnE5dMAIaVPFgD130J+5bQotkqZpdOM2fWQJtzg="
+
+ota:
+  - platform: esphome
+    password: "47fe8400caa5bc9c0cf7277dd64d146d"
+
+wifi:
+  ssid: "DuyLongNetwork"
+  password: "duylongpass"
+  fast_connect: true
+  power_save_mode: NONE
+  output_power: 15dBm
+  manual_ip:
+    static_ip: 192.168.2.33
+    gateway: 192.168.2.1
+    subnet: 255.255.255.0
+
+web_server:
+  port: 80
+
+i2c:
+  sda: GPIO5
+  scl: GPIO6
+  scan: true
+  frequency: 100kHz
+
+# HTTP Request component for API calls
+http_request:
+  useragent: esphome/device
+  timeout: 10s
+
+# Text sensors for different API endpoints
+text_sensor:
+  # Example 1: Fetch JSON data from custom API
+  - platform: http_request
+    name: "API Response"
+    id: api_response
+    url: "https://api.github.com/zen"  # Replace with your API endpoint
+    update_interval: 60s
+    on_value:
+      then:
+        - component.update: my_display
+        - logger.log:
+            format: "API Response: %s"
+            args: ['x.c_str()']
+  
+  # Example 2: Fetch status from another endpoint
+  - platform: http_request
+    name: "API Status"
+    id: api_status
+    url: "https://httpbin.org/status/200"  # Replace with your status endpoint
+    update_interval: 120s
+
+# Binary sensor to track API availability
+binary_sensor:
+  - platform: template
+    name: "API Available"
+    id: api_available
+    lambda: |-
+      return id(api_response).has_state();
+
+# Counter for successful API calls
+sensor:
+  - platform: template
+    name: "API Call Count"
+    id: api_call_count
+    accuracy_decimals: 0
+    update_interval: never
+
+# Switch to manually trigger API refresh
+switch:
+  - platform: gpio
+    name: "Main Device Switch"
+    pin: GPIO10
+    id: my_device_switch
+    on_turn_on:
+      - component.update: my_display
+    on_turn_off:
+      - component.update: my_display
+      
+  - platform: template
+    name: "Refresh API Data"
+    id: refresh_api
+    optimistic: true
+    turn_on_action:
+      - component.update: api_response
+      - component.update: api_status
+      - component.update: my_display
+      - delay: 1s
+      - switch.turn_off: refresh_api
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_tiny
+    size: 10
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 12
+  - file: "gfonts://Open Sans"
+    id: font_large
+    size: 14
+
+display:
+  - platform: ssd1306_i2c
+    id: my_display
+    model: "SSD1306 128x64"
+    address: 0x3C
+    update_interval: 1s
+    lambda: |-
+      // Header
+      it.print(64, 0, id(font_large), TextAlign::TOP_CENTER, "API DATA");
+      
+      // Horizontal Line
+      it.line(0, 16, 127, 16);
+      
+      // Display API response (truncated to fit screen)
+      if (id(api_response).has_state()) {
+        std::string response = id(api_response).state;
+        
+        // Truncate if too long
+        if (response.length() > 42) {
+          response = response.substr(0, 39) + "...";
+        }
+        
+        // Display first line
+        if (response.length() > 0) {
+          std::string line1 = response.substr(0, std::min((size_t)21, response.length()));
+          it.printf(0, 20, id(font_small), "%s", line1.c_str());
+        }
+        
+        // Display second line
+        if (response.length() > 21) {
+          std::string line2 = response.substr(21, std::min((size_t)21, response.length() - 21));
+          it.printf(0, 34, id(font_small), "%s", line2.c_str());
+        }
+      } else {
+        it.printf(0, 20, id(font_small), "Fetching data...");
+      }
+      
+      // Status indicator
+      it.line(0, 48, 127, 48);
+      if (id(api_available).state) {
+        it.printf(0, 52, id(font_tiny), "Status: ONLINE");
+      } else {
+        it.printf(0, 52, id(font_tiny), "Status: OFFLINE");
+      }
+      
+      // Switch status
+      if (id(my_device_switch).state) {
+        it.printf(90, 52, id(font_tiny), "SW:ON");
+      } else {
+        it.printf(90, 52, id(font_tiny), "SW:OFF");
+      }

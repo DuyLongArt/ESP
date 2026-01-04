@@ -1,0 +1,115 @@
+esphome:
+  name: esp32mini-weather
+  friendly_name: Esp32Mini Weather Display
+
+esp32:
+  board: esp32-c3-devkitm-1
+  variant: esp32c3
+  framework:
+    type: arduino # More stable for WiFi connection
+
+# Essential for C3 SuperMini logging over USB-C
+logger:
+  hardware_uart: USB_CDC 
+
+api:
+  encryption:
+    key: "oYYeNnE5dMAIaVPFgD130J+5bQotkqZpdOM2fWQJtzg="
+
+ota:
+  - platform: esphome
+    password: "47fe8400caa5bc9c0cf7277dd64d146d"
+
+wifi:
+  ssid: "DuyLongNetwork"
+  password: "duylongpass"
+  fast_connect: true
+  power_save_mode: NONE # Prevents "Auth Expired" disconnects
+  output_power: 15dBm
+  manual_ip:
+    static_ip: 192.168.2.32
+    gateway: 192.168.2.1
+    subnet: 255.255.255.0
+
+web_server:
+  port: 80
+
+# I2C configuration for pins 5 (SCL) and 6 (SDA)
+i2c:
+  sda: GPIO6
+  scl: GPIO5
+  scan: true
+  frequency: 100kHz # Slower speed for better reliability with jumper wires
+
+http_request:
+  useragent: esphome/device
+  timeout: 10s
+
+text_sensor:
+  - platform: http_request
+    id: weather_data
+    url: "https://api.open-meteo.com/v1/forecast?latitude=10.8231&longitude=106.6297&current_weather=true"
+    update_interval: 300s
+    on_value:
+      then:
+        - lambda: |-
+            // Parse the JSON response to communicate values to sensors
+            auto root = json::parse_json(x);
+            if (root.hasOwnProperty("current_weather")) {
+              float temp = root["current_weather"]["temperature"];
+              float wind = root["current_weather"]["windspeed"];
+              
+              // Publish states to the template sensors
+              id(temperature).publish_state(temp);
+              id(wind_speed).publish_state(wind);
+            }
+        - component.update: my_display
+
+sensor:
+  - platform: template
+    name: "Temperature"
+    id: temperature
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    update_interval: never
+    
+  - platform: template
+    name: "Wind Speed"
+    id: wind_speed
+    unit_of_measurement: "km/h"
+    accuracy_decimals: 1
+    update_interval: never
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 12
+  - file: "gfonts://Roboto"
+    id: font_medium
+    size: 14
+  - file: "gfonts://Open Sans"
+    id: font_large
+    size: 16
+
+display:
+  - platform: ssd1306_i2c
+    id: my_display
+    model: "SSD1306 128x64"
+    address: 0x3C # Standard OLED address
+    update_interval: 2s
+    lambda: |-
+      it.print(64, 0, id(font_large), TextAlign::TOP_CENTER, "WEATHER");
+      it.line(0, 18, 127, 18);
+      it.printf(0, 22, id(font_medium), "Ho Chi Minh City");
+      
+      if (id(temperature).has_state()) {
+        it.printf(0, 38, id(font_small), "Temp: %.1f°C", id(temperature).state);
+      } else {
+        it.printf(0, 38, id(font_small), "Temp: Fetching...");
+      }
+      
+      if (id(wind_speed).has_state()) {
+        it.printf(0, 52, id(font_small), "Wind: %.1f km/h", id(wind_speed).state);
+      } else {
+        it.printf(0, 52, id(font_small), "Wind: Fetching...");
+      }

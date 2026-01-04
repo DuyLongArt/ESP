@@ -1,0 +1,152 @@
+esphome:
+  name: esp32
+  friendly_name: Esp32
+  on_boot:
+    priority: -10
+    then:
+      # This triggers the weather fetch immediately on startup
+      - component.update: my_display
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf  # Changed from arduino for better performance
+    version: recommended
+json:
+# Set up I2C for the OLED display
+i2c:
+  sda: GPIO21
+  scl: GPIO22
+  scan: true
+
+# Correct way to handle HTTP requests
+http_request:
+  useragent: esphome/device
+  timeout: 10s
+  verify_ssl: false
+  # Prevent blocking warnings by using async requests
+  # esp8266_disable_ssl_support: false
+interval:
+  - interval: 600s  # Reduced from 300s to save CPU
+    then:
+      - http_request.get:
+          url: "https://api.open-meteo.com/v1/forecast?latitude=10.8231&longitude=106.6297&current_weather=true"
+          # STEP 1: You MUST have these two lines to enable the 'body' variable
+          capture_response: true
+          max_response_buffer_size: 2048  # Reduced to prevent blocking
+          # Add throttle to prevent too frequent calls
+          
+          
+          on_response:
+            then:
+              - if:
+                  condition:
+                    lambda: 'return response->status_code == 200;'
+                  then:
+                    - lambda: |-
+                        // STEP 2: Use ArduinoJson 7 syntax
+                        JsonDocument doc;
+                        
+                        // STEP 3: Use the variable 'body' (it's automatically available)
+                        DeserializationError error = deserializeJson(doc, body);
+
+                        if (!error) {
+                          if (doc["current_weather"].is<JsonObject>()) {
+                            float temp = doc["current_weather"]["temperature"];
+                            float wind = doc["current_weather"]["windspeed"];
+                            
+                            id(temperature).publish_state(temp);
+                            id(wind_speed).publish_state(wind);
+                          }
+                        } else {
+                          ESP_LOGE("custom", "JSON Error: %s", error.c_str());
+                        }
+                  else:
+                    - logger.log:
+                        format: "HTTP Request failed with status %d"
+                        args: [ 'response->status_code' ]
+              - component.update: my_display
+# Fonts
+font:
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 12
+  - file: "gfonts://Open Sans"
+    id: font_large
+    size: 15
+
+# Animation Component
+# Ensure "dance_cat_small.gif" is in the /config/esphome/image/ folder
+animation:
+  - file: "image/dance_cat_transparent.gif"
+    id: cat_anim
+    resize: 64x64
+    type: BINARY
+    transparency: chroma_key  # Removes background noise by treating it as transparent
+
+sensor:
+  - platform: template
+    name: "Temperature"
+    id: temperature
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    update_interval: never
+    
+  - platform: template
+    name: "Wind Speed"
+    id: wind_speed
+    unit_of_measurement: "km/h"
+    accuracy_decimals: 1
+    update_interval: never
+
+switch:
+  - platform: gpio
+    name: "Main Device Switch"
+    pin: GPIO13
+    id: my_device_switch
+    on_turn_on:
+      - component.update: my_display
+    on_turn_off:
+      - component.update: my_display
+
+display:
+  - platform: ssd1306_i2c
+    id: my_display
+    model: "SSD1306 128x64"
+    address: 0x3C
+    update_interval: 500ms  # Reduced from 250ms to save CPU (2 FPS)
+    lambda: |-
+      // Clear the entire display to remove noise/ghosting
+      it.fill(COLOR_OFF);
+      
+      // UI Logic  
+      if (id(my_device_switch).state) {
+        if (std::isnan(id(temperature).state)) {
+           it.print(0, 30, id(font_small), "Loading weather...");
+        } else {
+           it.printf(0, 30, id(font_small), "Temp: %.1f°C", id(temperature).state);
+           it.printf(0, 45, id(font_small), "Wind: %.1f km/h", id(wind_speed).state);
+        }
+      } else {
+        // Animation Logic - clean background
+        it.image(32, 0, id(cat_anim));  
+        id(cat_anim).next_frame(); 
+      }
+
+# Network Configuration
+wifi:
+  ssid: "DuyLongNetwork"
+  password: "duylongpass"
+  manual_ip:
+    static_ip: 192.168.2.29
+    gateway: 192.168.2.1
+    subnet: 255.255.255.0
+
+web_server:
+  port: 80
+logger:
+  level: WARN  # Reduced logging overhead
+api:
+ota:
+  - platform: esphome
+    password: "77c43d88a4205b2856891b145ba21b1c"

@@ -1,0 +1,85 @@
+esphome:
+  name: esp32mini
+  friendly_name: Esp32Mini
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "oYYeNnE5dMAIaVPFgD130J+5bQotkqZpdOM2fWQJtzg="
+
+ota:
+  - platform: esphome
+    password: "47fe8400caa5bc9c0cf7277dd64d146d"
+
+wifi:
+  ssid: "DuyLongNetwork"
+  password: "duylongpass"
+  fast_connect: true
+  power_save_mode: NONE
+  output_power: 15dBm
+  manual_ip:
+    static_ip: 192.168.2.31  # Choose an IP outside your DHCP range
+    gateway: 192.168.2.1     # Your router's IP
+    subnet: 255.255.255.0
+
+# Enable Home Assistant API
+
+  
+web_server:
+  port: 80
+# captive_portal:
+
+i2c:
+  sda: GPIO5
+  scl: GPIO6
+  scan: true
+  frequency: 100kHz
+
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 14
+  - file: "gfonts://Open Sans"
+    id: font_large
+    size: 15
+
+switch:
+  - platform: gpio
+    name: "Main Device Switch"
+    pin: GPIO10
+    id: my_device_switch
+    # This ensures the display updates whenever the switch is toggled
+    on_turn_on:
+      - component.update: my_display
+    on_turn_off:
+      - component.update: my_display
+
+display:
+  - platform: ssd1306_i2c
+    id: my_display
+    model: "SSD1306 128x64"
+    address: 0x3C
+    update_interval: 1s
+    lambda: |-
+      // Header
+      it.print(0, 0, id(font_large), "DUY LONG");
+      
+      // Horizontal Line
+      it.line(0, 24, 127, 24); 
+      
+      // Status Text
+      if (id(my_device_switch).state) {
+        it.printf(0, 30, id(font_small), "Switch: ON");
+      } else {
+        it.printf(0, 30, id(font_small), "Switch: OFF");
+      }

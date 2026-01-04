@@ -1,0 +1,147 @@
+esphome:
+  name: esp32mini-json
+  friendly_name: Esp32Mini JSON API Display
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+  level: DEBUG
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "oYYeNnE5dMAIaVPFgD130J+5bQotkqZpdOM2fWQJtzg="
+
+ota:
+  - platform: esphome
+    password: "47fe8400caa5bc9c0cf7277dd64d146d"
+
+wifi:
+  ssid: "DuyLongNetwork"
+  password: "duylongpass"
+  fast_connect: true
+  power_save_mode: NONE
+  output_power: 15dBm
+  manual_ip:
+    static_ip: 192.168.2.34
+    gateway: 192.168.2.1
+    subnet: 255.255.255.0
+
+web_server:
+  port: 80
+
+i2c:
+  sda: GPIO5
+  scl: GPIO6
+  scan: true
+  frequency: 100kHz
+
+# HTTP Request component
+http_request:
+  useragent: esphome/device
+  timeout: 10s
+
+# Interval to fetch data periodically
+interval:
+  - interval: 30s
+    then:
+      - http_request.get:
+          url: "https://api.coindesk.com/v1/bpi/currentprice/BTC.json"
+          on_response:
+            then:
+              - lambda: |-
+                  // Parse JSON response
+                  ESP_LOGD("http", "Response: %s", body.c_str());
+                  
+                  // Update display with new data
+                  id(my_display).update();
+
+# Text sensors to store parsed JSON values
+text_sensor:
+  - platform: template
+    name: "BTC Price USD"
+    id: btc_price_usd
+    
+  - platform: template
+    name: "BTC Price EUR"
+    id: btc_price_eur
+    
+  - platform: template
+    name: "Last Updated"
+    id: last_updated
+
+# Numeric sensor for price
+sensor:
+  - platform: template
+    name: "BTC Price Numeric"
+    id: btc_price_numeric
+    unit_of_measurement: "USD"
+    accuracy_decimals: 2
+    update_interval: never
+
+# Switch for manual control
+switch:
+  - platform: gpio
+    name: "Main Device Switch"
+    pin: GPIO10
+    id: my_device_switch
+    on_turn_on:
+      - component.update: my_display
+    on_turn_off:
+      - component.update: my_display
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_tiny
+    size: 10
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 12
+  - file: "gfonts://Roboto Mono"
+    id: font_mono
+    size: 11
+  - file: "gfonts://Open Sans"
+    id: font_large
+    size: 15
+
+display:
+  - platform: ssd1306_i2c
+    id: my_display
+    model: "SSD1306 128x64"
+    address: 0x3C
+    update_interval: 2s
+    lambda: |-
+      // Header
+      it.print(64, 0, id(font_large), TextAlign::TOP_CENTER, "CRYPTO");
+      
+      // Horizontal Line
+      it.line(0, 18, 127, 18);
+      
+      // Bitcoin symbol and name
+      it.printf(0, 22, id(font_small), "Bitcoin (BTC)");
+      
+      // Price in USD
+      if (id(btc_price_usd).has_state()) {
+        it.printf(0, 36, id(font_mono), "USD: %s", id(btc_price_usd).state.c_str());
+      } else {
+        it.printf(0, 36, id(font_small), "USD: Loading...");
+      }
+      
+      // Price in EUR
+      if (id(btc_price_eur).has_state()) {
+        it.printf(0, 48, id(font_mono), "EUR: %s", id(btc_price_eur).state.c_str());
+      } else {
+        it.printf(0, 48, id(font_small), "EUR: Loading...");
+      }
+      
+      // Footer with switch status
+      it.line(0, 58, 127, 58);
+      if (id(my_device_switch).state) {
+        it.printf(64, 60, id(font_tiny), TextAlign::TOP_CENTER, "LIVE");
+      } else {
+        it.printf(64, 60, id(font_tiny), TextAlign::TOP_CENTER, "PAUSED");
+      }
