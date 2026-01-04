@@ -80,7 +80,7 @@ font:
 animation:
   - file: "image/dance_cat_transparent.gif"
     id: cat_anim
-    resize: 64x64
+    resize: 72x72
     type: BINARY
     transparency: chroma_key  # Removes background noise by treating it as transparent
 
@@ -114,7 +114,7 @@ display:
     id: my_display
     model: "SSD1306 128x64"
     address: 0x3C
-    update_interval: 500ms  # Reduced from 250ms to save CPU (2 FPS)
+    update_interval: 300ms  # Reduced from 250ms to save CPU (2 FPS)
     lambda: |-
       // Clear the entire display to remove noise/ghosting
       it.fill(COLOR_OFF);
