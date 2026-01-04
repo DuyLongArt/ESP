@@ -66,8 +66,8 @@ ota:
     password: "77c43d88a4205b2856891b145ba21b1c"
 
 wifi:
-  ssid: "DuyLongNetwork"
-  password: "duylongpass"
+  ssid: !wifi_ssid
+  password: !wifi_password
   manual_ip:
     static_ip: 192.168.2.29  # Choose an IP outside your DHCP range
     gateway: 192.168.2.1     # Your router's IP

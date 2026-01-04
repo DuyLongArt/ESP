@@ -20,8 +20,8 @@ ota:
     password: "47fe8400caa5bc9c0cf7277dd64d146d"
 
 wifi:
-  ssid: "DuyLongNetwork"
-  password: "duylongpass"
+  ssid: !wifi_ssid
+  password: !wifi_password
   fast_connect: true
   power_save_mode: NONE
   output_power: 15dBm
